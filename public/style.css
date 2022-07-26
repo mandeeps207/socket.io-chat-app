@@ -1,0 +1,32 @@
+.message.left {
+  margin-right: 20% !important;
+  border-top-left-radius: 0 !important;
+}
+.message.right {
+  margin-left: 20% !important;
+  border-bottom-right-radius: 0 !important;
+}
+.msg-time {
+  display: block;
+  opacity: .7;
+  font-size: .7rem;
+}
+.messages {
+  height: 60vh;
+  overflow-y: auto;
+}
+.sidebar {
+  height: calc(60vh + 101px);
+}
+.table tr td, #user-title, #active-user, #users-tagline {
+  text-transform: capitalize;
+  font-weight: bold;
+}
+.table tr td {
+  cursor: pointer;
+}
+@media screen and (max-width: 767px) {
+  .body.container {
+    max-width: 95%;
+  }
+}
