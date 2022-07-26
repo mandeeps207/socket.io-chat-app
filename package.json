@@ -4,7 +4,7 @@
   "description": "Realtime chat app by Mandeep Singh. Nodejs, Express, MongoDB.",
   "main": "index.js",
   "scripts": {
-    "start": "nodemon index.js"
+    "start": "node index.js"
   },
   "keywords": [
     "socket.io",
