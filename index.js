@@ -50,7 +50,7 @@ io.use((socket, next) => {
 
 // socket events
 let users = [];
-io.on('connection', async (socket) => {
+io.on('connection', async socket => {
 
   // socket methods
   const methods = {
