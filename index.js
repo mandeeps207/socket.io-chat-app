@@ -1,10 +1,10 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
-dotenv.config({path: './config.env'});
+const fs = require('fs');
+const path = './data.json';
 
-require('./dbConnect');
-const tokenModel = require('./schema');
+dotenv.config({ path: './config.env' });
 
 const app = express();
 
@@ -17,7 +17,7 @@ const io = new Server(server);
 // middleware
 app.use(express.static('public'));
 app.use(express.json());
-app.use(express.urlencoded({extended: true}));
+app.use(express.urlencoded({ extended: true }));
 app.use(cors());
 
 // app homepage
@@ -35,14 +35,39 @@ app.post('/session', (req, res) => {
   res.send(data);
 });
 
+// Helper functions for file operations
+const initializeDataFile = () => {
+  if (!fs.existsSync(path)) {
+    const initialData = { users: [], messages: [] };
+    fs.writeFileSync(path, JSON.stringify(initialData, null, 2));
+  }
+}
+
+const readDataFromFile = () => {
+  if (!fs.existsSync(path)) {
+    initializeDataFile();
+  }
+  const jsonData = fs.readFileSync(path, 'utf-8');
+  try {
+    return JSON.parse(jsonData);
+  } catch (error) {
+    // If parsing fails, reinitialize the file
+    initializeDataFile();
+    return { users: [], messages: [] };
+  }
+}
+
+const writeDataToFile = (data) => {
+  fs.writeFileSync(path, JSON.stringify(data, null, 2));
+}
+
 // socket.io middleware
 io.use((socket, next) => {
   const username = socket.handshake.auth.username;
   const userID = socket.handshake.auth.userID;
-  if(!username) {
+  if (!username) {
     return next(new Error('Invalid username'));
   }
-  // create new session
   socket.username = username;
   socket.id = userID;
   next();
@@ -51,6 +76,7 @@ io.use((socket, next) => {
 // socket events
 let users = [];
 io.on('connection', async socket => {
+  console.log('A user connected:', socket.id);
 
   // socket methods
   const methods = {
@@ -58,52 +84,52 @@ io.on('connection', async socket => {
       let key = [sender, receiver].sort().join("_");
       return key;
     },
-    fetchMessages: async (sender, receiver) => {
+    fetchMessages: (sender, receiver) => {
+      const data = readDataFromFile();
       let token = methods.getToken(sender, receiver);
-      const findToken = await tokenModel.findOne({userToken: token});
-      if(findToken) {
-        io.to(sender).emit('stored-messages', {messages: findToken.messages});
+      const findToken = data.messages.find(msg => msg.userToken === token);
+      if (findToken) {
+        io.to(sender).emit('stored-messages', { messages: findToken.messages });
       } else {
-        let data = {
+        let newToken = {
           userToken: token,
           messages: []
         }
-        const saveToken = new tokenModel(data);
-        const createToken = await saveToken.save();
-        if(createToken) {
-          console.log('Token created!');
-        } else {
-          console.log('Error in creating token');
-        }
+        data.messages.push(newToken);
+        writeDataToFile(data);
+        console.log('Token created!');
       }
     },
-    saveMessages : async ({from, to, message, time}) => {
+    saveMessages: ({ from, to, message, time }) => {
+      const data = readDataFromFile();
       let token = methods.getToken(from, to);
-      let data = {
-        from,
-        message,
-        time
+      let findToken = data.messages.find(msg => msg.userToken === token);
+      if (findToken) {
+        findToken.messages.push({ from, message, time });
+      } else {
+        let newToken = {
+          userToken: token,
+          messages: [{ from, message, time }]
+        }
+        data.messages.push(newToken);
       }
-      tokenModel.updateOne({userToken: token}, {
-        $push: {messages: data}
-      }, (err, res) => {
-        if (err) throw err;
-        console.log('Message saved!', res);
-      });
+      writeDataToFile(data);
+      console.log('Message saved!');
     }
   }
 
   // get all users
   let userData = {
-    username : socket.username,
-    userID : socket.id
+    username: socket.username,
+    userID: socket.id
   }
   users.push(userData);
-  io.emit('users', {users});
+  io.emit('users', { users });
 
   socket.on('disconnect', () => {
-    users = users.filter( user => user.userID !== socket.id);
-    io.emit('users', {users} );
+    console.log('A user disconnected:', socket.id);
+    users = users.filter(user => user.userID !== socket.id);
+    io.emit('users', { users });
     io.emit('user-away', socket.id);
   });
 
@@ -114,7 +140,7 @@ io.on('connection', async socket => {
   });
 
   // fetch previous messages
-  socket.on('fetch-messages', ({receiver}) => {
+  socket.on('fetch-messages', ({ receiver }) => {
     methods.fetchMessages(socket.id, receiver);
   });
 
